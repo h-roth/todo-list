@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:15-alpine3.17
+    environment:
+      - POSTGRES_DB=todo
+      - POSTGRES_PASSWORD=password
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - ./db/initdb.d/:/docker-entrypoint-initdb.d/
+      - pgdata:/var/lib/postgresql/data
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.46
+    ports:
+      - 127.0.0.1:4318:4318
+      - 127.0.0.1:14268:14268
+      - 127.0.0.1:16686:16686
+
+  api:
+    build: backend
+    profiles:
+      - backend
+    command:
+      - --dburl=postgres://todo:password@db/todo?sslmode=disable
+      - --host=0.0.0.0
+    environment:
+      - OTEL_EXPORTER_JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - USER=backend
+    ports:
+      - 127.0.0.1:8080:8080
+
+  simulate-ui:
+    build: frontend
+    profiles:
+      - simulate-traffic
+    environment:
+      - DEBUG
+
+volumes:
+  pgdata: {}
