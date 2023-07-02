@@ -70,38 +70,81 @@ func (r *ListRepository) List(ctx context.Context, listID string) (*todo.DueList
 	return &todo.DueList{DueItems: due, List: *list}, nil
 }
 
+type nullableItem struct {
+	ID          sql.NullString
+	Description sql.NullString
+	Due         sql.NullTime
+	Completed   sql.NullTime
+}
+
 func (r *ListRepository) Lists(ctx context.Context) ([]todo.DueList, error) {
 	query := `
-		-- Name: TODO Lists
-		SELECT id,
-		       description
-		  FROM lists
+		SELECT 
+			lists.id,
+			lists.description,
+			items.id,
+			items.description,
+			items.due,
+			items.completed
+		FROM lists
+		LEFT JOIN (
+			SELECT 
+				id,
+				description,
+				due,
+				completed,
+				list_id
+			FROM items
+			WHERE due <= now() + INTERVAL '1 day' 
+				AND completed IS NULL
+		) AS items ON lists.id = items.list_id
+		ORDER BY items.due
 	`
 
-	cols := func(l *todo.List) []any {
-		return []any{&l.ID, &l.Description}
-	}
-
-	lists, err := queryRows(ctx, r.db, cols, query)
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query todo lists: %w", err)
+		return nil, fmt.Errorf("failed to query todo lists and due items: %w", err)
 	}
+	defer rows.Close()
 
-	if len(lists) == 0 {
-		return nil, nil
-	}
-
-	dueList := make([]todo.DueList, len(lists))
-	for i, l := range lists {
-		due, err := r.dueItems(ctx, l.ID)
+	dueLists := make(map[string]todo.DueList)
+	for rows.Next() {
+		var list todo.List
+		var nullableItem nullableItem
+		err := rows.Scan(&list.ID, &list.Description, &nullableItem.ID, &nullableItem.Description, &nullableItem.Due, &nullableItem.Completed)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
-		dueList[i] = todo.DueList{DueItems: due, List: l}
+		dl, ok := dueLists[list.ID]
+		if !ok {
+			dl = todo.DueList{
+				List:     list,
+				DueItems: []todo.Item{},
+			}
+		}
+
+		// Check if item is not NULL before appending
+		if nullableItem.ID.Valid {
+			item := todo.Item{
+				ID:          nullableItem.ID.String,
+				Description: nullableItem.Description.String,
+				Due:         &nullableItem.Due.Time,
+				Completed:   &nullableItem.Completed.Time,
+			}
+			dl.DueItems = append(dl.DueItems, item)
+		}
+
+		dueLists[list.ID] = dl
 	}
 
-	return dueList, nil
+	// Convert map to slice
+	result := make([]todo.DueList, 0, len(dueLists))
+	for _, dl := range dueLists {
+		result = append(result, dl)
+	}
+
+	return result, nil
 }
 
 func (r *ListRepository) dueItems(ctx context.Context, listID string) ([]todo.Item, error) {
