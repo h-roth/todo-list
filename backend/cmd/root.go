@@ -64,13 +64,13 @@ func Run(ctx context.Context, cfg *Config, logger *slog.Logger, stdout, stderr i
 		return err
 	}
 
-	// Setup Tracing: Uncomment this block
-	//shutdown, err := setupTracing(ctx, logger)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//defer shutdown()
+	// Setup Tracing
+	shutdown, err := setupTracing(ctx, logger)
+	if err != nil {
+		return err
+	}
+
+	defer shutdown()
 
 	db, err := openDB(cfg.DBConn)
 	if err != nil {
@@ -133,9 +133,11 @@ func openDB(connURL string) (*sql.DB, error) {
 		return nil, fmt.Errorf("unable to parse DB connection string: %w", err)
 	}
 
-	return sql.OpenDB(conn), nil
-	// Instrument Database Calls: Replace the line above with the one below
-	//return traceDB(connURL, conn)
+	// Normal db call with no instrumentation:
+	// return sql.OpenDB(conn), nil
+
+	// Instrumented Database Calls
+	return traceDB(connURL, conn)
 }
 
 func traceDB(connURL string, conn driver.Connector) (*sql.DB, error) {

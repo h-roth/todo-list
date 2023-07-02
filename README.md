@@ -15,7 +15,13 @@ To make the session as smooth as possible, ideally you also have the project rea
 
 * The repository has been cloned: `git clone git@github.org:dackroyd/todo-list.git`
 * Docker images used by `docker-compose.yaml` have been fetched & built. From the root of the repo:
-    * `docker compose pull`
-    * `docker compose --profile frontend build simulate-ui`
-    * Optional: only if you intend to build/run the app in Docker `docker compose --profile backend build api`
+  * `docker compose pull`
+  * `docker compose --profile frontend build simulate-ui`
+  * Optional: only if you intend to build/run the app in Docker `docker compose --profile backend build api`
 * Go module dependencies have been fetched `cd backend && go mod download`
+
+To stop the frontend docker profile:
+
+* `docker compose --profile simulate-traffic stop` to stop the container.
+* `docker compose --profile simulate-traffic rm -f` to delete the volume.
+Note that profiles in docker compose will be ignored by dcd and dcu unless specifically targeted.

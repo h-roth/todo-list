@@ -26,8 +26,8 @@ type mux struct {
 
 func (m *mux) handler(method, route string, h http.Handler) {
 	w := requestLog(h, m.logger, route)
-	// Instrument HTTP Handlers: Uncomment the line below
-	//w = otelhttp.NewHandler(w, method+" "+route)
+	// Instrument HTTP Handlers with open telemetry
+	w = otelhttp.NewHandler(w, method+" "+route)
 
 	m.router.Handler(method, route, w)
 }
